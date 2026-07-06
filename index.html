@@ -1564,6 +1564,7 @@ function exportarExcel() {
   XLSX.utils.book_append_sheet(wb, ws2, 'Resumen cliente');
 
   XLSX.writeFile(wb, `Cotizacion_${cliente.replace(/\s+/g,'_')}_LobatTours.xlsx`);
+  
 }
 function exportarWord() {
   const cliente = document.getElementById('clienteNombre').value || 'Cliente';
