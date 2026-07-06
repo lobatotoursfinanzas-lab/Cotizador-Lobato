@@ -317,6 +317,12 @@
     .quote-header .disp { font-family: var(--font-disp); font-size: 1.4rem; color: var(--guinda); }
     .quote-header .pkg-name { font-family: var(--font-disp); font-size: 1.1rem; color: var(--gray-700); margin-top: 0.15rem; }
     .quote-header .sub { font-size: 0.72rem; color: var(--gray-500); margin-top: 0.2rem; }
+    .quote-logo { display: none; text-align: center; margin-bottom: 0.85rem; }
+.quote-logo img { height: 42px; }
+
+@media print {
+  .quote-logo { display: block !important; }
+}
 
     .markup-control {
       display: flex; align-items: center; gap: 0.5rem;
@@ -629,6 +635,8 @@
   <!-- RIGHT — Summary -->
   <div class="summary-panel">
     <div class="card resumen-card">
+      <div class="quote-logo">
+  <img src="data:image/png;base64,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
       <div class="quote-header">
         <div class="disp" id="quoteTitle">Resumen de cotización</div>
         <div class="pkg-name" id="quotePkgName" style="display:none"></div>
