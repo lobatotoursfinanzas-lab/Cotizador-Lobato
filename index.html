@@ -1565,7 +1565,97 @@ function exportarExcel() {
 
   XLSX.writeFile(wb, `Cotizacion_${cliente.replace(/\s+/g,'_')}_LobatTours.xlsx`);
 }
+function exportarWord() {
+  const cliente = document.getElementById('clienteNombre').value || 'Cliente';
+  const paquete = document.getElementById('nombrePaquete').value || '';
+  const destino = document.getElementById('destino').value || '';
+  const salida  = document.getElementById('fechaSalida').value || '';
+  const regreso = document.getElementById('fechaRegreso').value || '';
+  const pax     = parseInt(document.getElementById('pax').value) || 1;
+  const markup  = parseFloat(document.getElementById('markupPct').value) || 0;
+  const factor  = activos.filter(s => s.costo > 0).length >= 2 ? (1 + markup / 100) : 1;
 
+  const totalCostoMXN = activos.reduce((sum, s) => sum + aMXN(s.costo * s.qty, s.moneda), 0);
+  const totalVentaMXN = totalCostoMXN * factor;
+  const gananciaMXN   = totalVentaMXN - totalCostoMXN;
+  const ppMXN         = totalVentaMXN / pax;
+
+  const logoSrc = document.querySelector('.topbar img').src;
+  const diasConContenido   = dias.filter(d => d.titulo.trim() || d.desc.trim());
+  const incluyeOk    = incluye.filter(i => i.texto.trim());
+  const noIncluyeOk  = noIncluye.filter(i => i.texto.trim());
+
+  let cuerpo = `<div style="text-align:center;margin-bottom:18px"><img src="${logoSrc}" style="height:55px"></div>
+    <h1 style="color:#8B1A1A;text-align:center;font-family:Georgia,serif;font-size:24px;margin-bottom:4px">Cotización Lobato Tours</h1>
+    ${paquete ? `<h2 style="text-align:center;font-family:Georgia,serif;font-size:18px;color:#444;margin-top:0">${paquete}</h2>` : ''}
+    <table style="width:100%;font-family:Arial,sans-serif;font-size:13px;margin-bottom:16px">
+      <tr><td><b>Cliente:</b> ${cliente}</td><td><b>Destino:</b> ${destino}</td></tr>
+      <tr><td><b>Pasajeros:</b> ${pax}</td><td><b>Salida:</b> ${salida || '-'} &nbsp; <b>Regreso:</b> ${regreso || '-'}</td></tr>
+    </table>`;
+
+  if (vistaCliente) {
+    // ── Vista cliente: precio final por persona ──
+    cuerpo += `
+      <div style="text-align:center;background:#f5eded;border-radius:8px;padding:16px;margin-bottom:16px">
+        <div style="font-size:11px;color:#8B1A1A;text-transform:uppercase;letter-spacing:1px">Precio por persona</div>
+        <div style="font-family:Georgia,serif;font-size:30px;color:#8B1A1A">${simbolo()} ${fmt(aResumen(ppMXN))}</div>
+        ${pax > 1 ? `<div style="font-size:12px;color:#777">Total ${pax} pasajeros: ${simbolo()} ${fmt(aResumen(totalVentaMXN))}</div>` : ''}
+      </div>`;
+  } else {
+    // ── Vista agencia: desglose completo ──
+    cuerpo += `<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px;margin-bottom:12px">
+      <tr style="background:#8B1A1A;color:#fff">
+        <th style="padding:6px;text-align:left">Servicio</th>
+        <th style="padding:6px">Cant.</th>
+        <th style="padding:6px">Costo (MXN)</th>
+        <th style="padding:6px">Venta (MXN)</th>
+      </tr>`;
+    activos.filter(s => s.costo > 0).forEach(s => {
+      const costoMXN = aMXN(s.costo * s.qty, s.moneda);
+      const ventaMXN = costoMXN * factor;
+      cuerpo += `<tr>
+        <td style="padding:6px;border-bottom:1px solid #eee">${s.icon} ${s.nombre}</td>
+        <td style="padding:6px;border-bottom:1px solid #eee;text-align:center">${s.qty}</td>
+        <td style="padding:6px;border-bottom:1px solid #eee;text-align:right">$${fmt(costoMXN)}</td>
+        <td style="padding:6px;border-bottom:1px solid #eee;text-align:right">$${fmt(ventaMXN)}</td>
+      </tr>`;
+    });
+    cuerpo += `</table>
+      <table style="width:100%;font-family:Arial,sans-serif;font-size:13px;margin-bottom:16px">
+        <tr><td><b>Costo total:</b></td><td style="text-align:right">$${fmt(totalCostoMXN)} MXN</td></tr>
+        <tr><td><b>Ganancia (markup ${markup}%):</b></td><td style="text-align:right">$${fmt(gananciaMXN)} MXN</td></tr>
+        <tr><td style="color:#8B1A1A"><b>Precio de venta:</b></td><td style="text-align:right;color:#8B1A1A"><b>$${fmt(totalVentaMXN)} MXN</b></td></tr>
+      </table>`;
+  }
+
+  if (diasConContenido.length > 0) {
+    cuerpo += `<h3 style="color:#8B1A1A;font-family:Georgia,serif;border-bottom:1px solid #e8e0e0;padding-bottom:4px">Itinerario</h3>`;
+    diasConContenido.forEach(d => {
+      cuerpo += `<p style="font-family:Arial,sans-serif;font-size:13px;margin:6px 0"><b>${d.titulo}</b>${d.desc ? ' — ' + d.desc : ''}</p>`;
+    });
+  }
+
+  if (incluyeOk.length > 0 || noIncluyeOk.length > 0) {
+    cuerpo += `<h3 style="color:#8B1A1A;font-family:Georgia,serif;border-bottom:1px solid #e8e0e0;padding-bottom:4px;margin-top:16px">Incluye / No incluye</h3>`;
+    incluyeOk.forEach(i   => cuerpo += `<p style="font-family:Arial,sans-serif;font-size:13px;margin:4px 0;color:#2d7a3a">✔ ${i.texto}</p>`);
+    noIncluyeOk.forEach(i => cuerpo += `<p style="font-family:Arial,sans-serif;font-size:13px;margin:4px 0;color:#8B1A1A">✘ ${i.texto}</p>`);
+  }
+
+  const htmlCompleto = `
+    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+    <head><meta charset='utf-8'><title>Cotización</title></head>
+    <body>${cuerpo}</body></html>`;
+
+  const blob = new Blob(['\ufeff', htmlCompleto], { type: 'application/msword' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `Cotizacion_${cliente.replace(/\s+/g,'_')}_LobatoTours.doc`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 function limpiarTodo() {
   if (!confirm('¿Limpiar toda la cotización?')) return;
   activos = [];
