@@ -905,6 +905,30 @@
   </div>
 </div>
 
+<!-- Modal: Crear proveedor -->
+<div class="modal-overlay" id="provOverlay" onclick="cerrarModalProveedor(event)">
+  <div class="modal" style="max-width:420px">
+    <button class="modal-close" onclick="cerrarModalProveedorBtn()">✕</button>
+    <h3>Crear proveedor</h3>
+    <p style="font-size:.8rem;color:var(--gray-500);margin-bottom:1rem">Se guarda en la hoja Proveedores y queda disponible para todas las cotizaciones</p>
+    <div class="field" style="margin-bottom:.85rem">
+      <label>Nombre del proveedor</label>
+      <input type="text" id="provNombre" placeholder="ej. Mayoristas del Pacífico" onkeydown="if(event.key==='Enter') guardarProveedor()" />
+    </div>
+    <div class="field" style="margin-bottom:1rem">
+      <label>Categoría</label>
+      <select id="provCategoria">
+        <option value="transporte">Transporte</option>
+        <option value="hospedaje">Hospedaje</option>
+        <option value="extras">Extras</option>
+        <option value="otros">Otros servicios</option>
+      </select>
+    </div>
+    <div class="login-err" id="provFeedback"></div>
+    <button class="btn-primary" id="btnGuardarProv" onclick="guardarProveedor()">💾 Guardar proveedor</button>
+  </div>
+</div>
+
 <script>
 const APPS_URL = 'https://script.google.com/macros/s/AKfycbwIa52VTD4NBaUi62HbUdEcVcfclvpSBubBP6l5P5kRXWQ5y8w2x-9n7CXVj5oOwkl5/exec';
 
@@ -1071,6 +1095,19 @@ function cerrarCotizacionesModalBtn() {
   document.getElementById('cotizacionesOverlay').classList.remove('open');
 }
 
+/* Fecha + hora (zona Tijuana). Si el dato guardado es solo fecha (sin hora), muestra solo la fecha. */
+function fmtFechaHora(v) {
+  if (!v) return '';
+  const TZ = 'America/Tijuana';
+  const soloFecha = typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.trim());
+  const d = new Date(soloFecha ? v.trim() + 'T00:00:00' : v);
+  if (isNaN(d)) return String(v);
+  const f = d.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: soloFecha ? undefined : TZ });
+  if (soloFecha) return f;
+  const h = d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: TZ });
+  return `${f} ${h}`;
+}
+
 function renderCotizacionesList() {
   const cont = document.getElementById('cotizacionesLista');
   if (cotizacionesCache.length === 0) {
@@ -1082,7 +1119,7 @@ function renderCotizacionesList() {
     const estatus = c['Estatus'] || 'Borrador';
     const enviada  = estatus === 'Enviada' || estatus === 'Aprobada' || estatus === 'Rechazada';
     const decidida = estatus === 'Aprobada' || estatus === 'Rechazada';
-    const fecha = c['Fecha emisión'] ? new Date(c['Fecha emisión']).toLocaleDateString('es-MX') : '';
+    const fecha = fmtFechaHora(c['Fecha emisión'] || c['Fecha']);
     const total = Number(c['Total'] || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 });
 
     return `
@@ -1584,23 +1621,94 @@ function getCategoriaProveedor(p) {
 }
 
 function proveedorOptionsHtml(s) {
-  const base = `<option value="">— Sin proveedor —</option>`;  if (proveedoresTodos === null) {
+  const base  = `<option value="">— Sin proveedor —</option>`;
+  const crear = `<option value="__nuevo__">➕ Crear proveedor…</option>`;
+  if (proveedoresTodos === null) {
     return base + `<option disabled>Cargando…</option>`;
   }
   const opciones = proveedoresTodos.filter(p => getCategoriaProveedor(p) === s.cat);
   if (opciones.length === 0) {
-    return base + `<option disabled>Sin proveedores en esta categoría</option>`;
+    return base + `<option disabled>Sin proveedores en esta categoría</option>` + crear;
   }
   return base + opciones.map(p => {
     const nombre = (p['Proveedor'] || '').toString();
     const sel = s.proveedor === nombre ? 'selected' : '';
     return `<option value="${nombre.replace(/"/g,'&quot;')}" ${sel}>${nombre.replace(/</g,'&lt;')}</option>`;
-  }).join('');
+  }).join('') + crear;
 }
 
 function setProveedor(uid, val) {
+  if (val === '__nuevo__') {       // opción "Crear proveedor…"
+    renderServicios();              // devuelve el selector a su valor anterior
+    abrirModalProveedor(uid);
+    return;
+  }
   const s = activos.find(s => s.uid === uid);
   if (s) s.proveedor = val;
+}
+
+/* ── Crear proveedor ── */
+let provUid = null;   // servicio desde el que se abrió el modal
+
+function abrirModalProveedor(uid) {
+  if (!sesion) { alert('Debes iniciar sesión primero.'); return; }
+  provUid = uid;
+  const s = activos.find(x => x.uid === uid);
+  const cats = ['transporte', 'hospedaje', 'extras', 'otros'];
+  document.getElementById('provNombre').value = '';
+  document.getElementById('provCategoria').value = (s && cats.includes(s.cat)) ? s.cat : 'otros';
+  document.getElementById('provFeedback').textContent = '';
+  document.getElementById('provOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('provNombre').focus(), 50);
+}
+function cerrarModalProveedor(e) {
+  if (e.target === document.getElementById('provOverlay')) cerrarModalProveedorBtn();
+}
+function cerrarModalProveedorBtn() {
+  document.getElementById('provOverlay').classList.remove('open');
+}
+
+async function guardarProveedor() {
+  const nombre    = document.getElementById('provNombre').value.trim().replace(/\s+/g, ' ');
+  const categoria = document.getElementById('provCategoria').value;
+  const fbEl      = document.getElementById('provFeedback');
+  const btnEl     = document.getElementById('btnGuardarProv');
+  const svc       = activos.find(x => x.uid === provUid);
+
+  if (!nombre) { fbEl.textContent = 'Escribe el nombre del proveedor.'; return; }
+
+  // Si ya existe en esa categoría, no se duplica: se selecciona el existente
+  const existente = (proveedoresTodos || []).find(p =>
+    (p['Proveedor'] || '').toString().trim().toLowerCase() === nombre.toLowerCase() &&
+    getCategoriaProveedor(p) === categoria);
+  if (existente) {
+    if (svc && svc.cat === categoria) svc.proveedor = (existente['Proveedor'] || '').toString();
+    cerrarModalProveedorBtn();
+    renderServicios();
+    return;
+  }
+
+  btnEl.disabled = true;
+  fbEl.textContent = 'Guardando…';
+  try {
+    const res  = await fetch(APPS_URL, {
+      method: 'POST',
+      body: JSON.stringify({ accion: 'crearProveedor', proveedor: nombre, categoria, agente: sesion.nombre, rol: sesion.rol })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      if (proveedoresTodos === null) proveedoresTodos = [];
+      proveedoresTodos.push({ 'Proveedor': nombre, 'Categoria': categoria });
+      if (svc && svc.cat === categoria) svc.proveedor = nombre;
+      cerrarModalProveedorBtn();
+      renderServicios();
+    } else {
+      fbEl.textContent = '❌ ' + (data.error || 'No se pudo crear el proveedor');
+    }
+  } catch (e) {
+    fbEl.textContent = '❌ Error de conexión';
+  }
+  btnEl.disabled = false;
 }
 
 /* ── Modal ── */
